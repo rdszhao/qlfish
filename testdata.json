@@ -1,0 +1,334 @@
+{
+    "students": [
+      {
+        "student_id": 1,
+        "name": "Alice",
+        "age": 20,
+        "major": "Computer Science",
+        "gpa": 3.8
+      },
+      {
+        "student_id": 2,
+        "name": "Bob",
+        "age": 22,
+        "major": "Computer Science",
+        "gpa": 3.6
+      },
+      {
+        "student_id": 3,
+        "name": "Charlie",
+        "age": 21,
+        "major": "Computer Science",
+        "gpa": 3.9
+      },
+      {
+        "student_id": 4,
+        "name": "David",
+        "age": 23,
+        "major": "Computer Science",
+        "gpa": 3.7
+      },
+      {
+        "student_id": 5,
+        "name": "Eve",
+        "age": 20,
+        "major": "Data Science",
+        "gpa": 3.9
+      },
+      {
+        "student_id": 6,
+        "name": "Frank",
+        "age": 22,
+        "major": "Data Science",
+        "gpa": 3.6
+      },
+      {
+        "student_id": 7,
+        "name": "Grace",
+        "age": 21,
+        "major": "Data Science",
+        "gpa": 3.8
+      },
+      {
+        "student_id": 8,
+        "name": "Hank",
+        "age": 23,
+        "major": "Data Science",
+        "gpa": 3.7
+      },
+      {
+        "student_id": 9,
+        "name": "Ivy",
+        "age": 20,
+        "major": "Computer Engineering",
+        "gpa": 3.6
+      },
+      {
+        "student_id": 10,
+        "name": "Jack",
+        "age": 22,
+        "major": "Computer Engineering",
+        "gpa": 3.8
+      },
+      {
+        "student_id": 11,
+        "name": "Kate",
+        "age": 21,
+        "major": "Computer Engineering",
+        "gpa": 3.7
+      },
+      {
+        "student_id": 12,
+        "name": "Leo",
+        "age": 23,
+        "major": "Computer Engineering",
+        "gpa": 3.9
+      }
+    ],
+    "courses": [
+      {
+        "course_id": 101,
+        "course_name": "Introduction to Programming",
+        "instructor": "Prof. Smith"
+      },
+      {
+        "course_id": 102,
+        "course_name": "Data Structures",
+        "instructor": "Prof. Johnson"
+      },
+      {
+        "course_id": 103,
+        "course_name": "Algorithms",
+        "instructor": "Prof. Davis"
+      },
+      {
+        "course_id": 104,
+        "course_name": "Database Management",
+        "instructor": "Prof. White"
+      },
+      {
+        "course_id": 105,
+        "course_name": "Machine Learning",
+        "instructor": "Prof. Brown"
+      }
+    ],
+    "enrollments": [
+      {
+        "enrollment_id": 1,
+        "student_id": 1,
+        "course_id": 101,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 2,
+        "student_id": 1,
+        "course_id": 102,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 3,
+        "student_id": 1,
+        "course_id": 103,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 4,
+        "student_id": 2,
+        "course_id": 101,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 5,
+        "student_id": 2,
+        "course_id": 102,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 6,
+        "student_id": 2,
+        "course_id": 105,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 7,
+        "student_id": 3,
+        "course_id": 101,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 8,
+        "student_id": 3,
+        "course_id": 103,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 9,
+        "student_id": 3,
+        "course_id": 104,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 10,
+        "student_id": 4,
+        "course_id": 102,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 11,
+        "student_id": 4,
+        "course_id": 104,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 12,
+        "student_id": 4,
+        "course_id": 105,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 13,
+        "student_id": 5,
+        "course_id": 103,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 14,
+        "student_id": 5,
+        "course_id": 104,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 15,
+        "student_id": 5,
+        "course_id": 105,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 16,
+        "student_id": 6,
+        "course_id": 101,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 17,
+        "student_id": 6,
+        "course_id": 102,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 18,
+        "student_id": 6,
+        "course_id": 105,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 19,
+        "student_id": 7,
+        "course_id": 101,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 20,
+        "student_id": 7,
+        "course_id": 103,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 21,
+        "student_id": 7,
+        "course_id": 105,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 22,
+        "student_id": 8,
+        "course_id": 102,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 23,
+        "student_id": 8,
+        "course_id": 104,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 24,
+        "student_id": 8,
+        "course_id": 105,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 25,
+        "student_id": 9,
+        "course_id": 101,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 26,
+        "student_id": 9,
+        "course_id": 102,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 27,
+        "student_id": 9,
+        "course_id": 104,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 28,
+        "student_id": 10,
+        "course_id": 101,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 29,
+        "student_id": 10,
+        "course_id": 102,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 30,
+        "student_id": 10,
+        "course_id": 105,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 31,
+        "student_id": 11,
+        "course_id": 102,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 32,
+        "student_id": 11,
+        "course_id": 103,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 33,
+        "student_id": 11,
+        "course_id": 104,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 34,
+        "student_id": 12,
+        "course_id": 101,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 35,
+        "student_id": 12,
+        "course_id": 103,
+        "semester": "Fall 2023"
+      },
+      {
+        "enrollment_id": 36,
+        "student_id": 12,
+        "course_id": 105,
+        "semester": "Fall 2023"
+      }
+    ]
+  }
+  

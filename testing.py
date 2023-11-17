@@ -1,13 +1,14 @@
 # %%
 from parserfile import get_parser
-
-db = Database(2e5)
+from db import Database
 parser = get_parser()
-db.ingest('data/students1.csv', 'students')
-db.ingest('data/courses1.csv', 'courses')
-db.ingest('data/enrollments1.csv', 'enrollments')
 # %%
-qstring = 'select semester, course_name [asc] where students.major == "Computer Engineering" from join students, enrollments, courses on students.student_id: enrollments.student_id, enrollments.course_id: courses.course_id '
+db = Database(2e5)
+db.ingest('data/students.csv', 'students')
+db.ingest('data/courses.csv', 'courses')
+db.ingest('data/enrollments.csv', 'enrollments')
+# %%
+qstring = 'select semester, course_name [asc] where major == "Computer Engineering" from join students, enrollments, courses on students.student_id: enrollments.student_id, enrollments.course_id: courses.course_id '
 parsed = parser.parse(qstring)
 # %%
 query1 = db.query(
@@ -27,14 +28,19 @@ query2 = db.query(
 )
 query2
 # %%
+# def qquery(*args, **kwargs):
+#     return kwargs
+
 def generate_query(parsed):
-	if 'subq' in parsed:
-		subq = parsed['subq']
-		if type(subq) == str:
-			parsed['tables'] = [subq]
-		else:
-			parsed['subq'] = generate_query(parsed['subq'])
-	else:
+	try:
+		if 'subq' in parsed:
+			subq = parsed['subq']
+			if type(subq) == str:
+				parsed['tables'] = [subq]
+			else:
+				parsed['subq'] = generate_query(parsed['subq'])
+		return db.query(**parsed)
+	except:
 		return db.query(**parsed)
 # %%
 generate_query(parsed)
@@ -77,6 +83,7 @@ db.query(
 	)
 )
 # %%
+select course_name [asc], semester where students.major == "Computer Engineering" from join students, enrollments, courses on students.student_id: enrollments.student_id, enrollments.course_id: courses.course_id 
 '''
 select course_name [asc], semester where students.major == "Computer Engineering"
 from join students, enrollments, courses 

@@ -9,6 +9,8 @@ import csv
 import argparse
 from collections import defaultdict
 
+from parserfile import get_parser
+
 class Database:
     def __init__(self, core_lim=20000)->None:
         self.tables = {}
@@ -17,18 +19,22 @@ class Database:
 
     def ingest(self, filename:str, table:str)->None:
         self.tables[table] = filename
-        with open(filename, 'r') as f:
-            reader = csv.reader(f)
-            header = next(reader)
-            total_bytes, rows = 0, 0
-            for row in reader:
-                total_bytes += sys.getsizeof(row)
-                rows += 1
-            avg_bytes = total_bytes / rows
-            chunk_size = int(self.core_lim / avg_bytes)
-            if chunk_size > self.chunk_size:
-                self.chunk_size = chunk_size
-            print(self.chunk_size)
+        try:
+            with open(filename, 'r') as f:
+                reader = csv.reader(f)
+                header = next(reader)
+                total_bytes, rows = 0, 0
+                for row in reader:
+                    total_bytes += sys.getsizeof(row)
+                    rows += 1
+                avg_bytes = total_bytes / rows
+                chunk_size = int(self.core_lim / avg_bytes)
+                if chunk_size > self.chunk_size:
+                    self.chunk_size = chunk_size
+                print(self.chunk_size)
+            return f"ingested {filename} into {table}"
+        except Exception as e:
+            return f"failed to ingest {filename} into {table} \n {e}"
 
     def open_stream(self, table:str):
         filename = self.tables[table]
@@ -420,84 +426,49 @@ class Query:
         
         return field, op, value
 
-class QueryParser:
-    def __init__(self):
-        # Regular expressions to match different parts of the query
-        self.regex_select = re.compile(r'select (.+) where (.+) from join (.+) on (.+)')
-        self.regex_agg = re.compile(r'find (.+)\((.+)\) by (.+) from (.+)')
-        self.regex_join = re.compile(r'(\w+\.\w+): (\w+\.\w+)')
-
-    def parse(self, query):
-        # Check for aggregation type queries
-        match_agg = self.regex_agg.match(query)
-        if match_agg:
-            agg_func, agg_field, group_by, table = match_agg.groups()
-            return {
-                'method': 'agg',
-                'agg_func': agg_func.strip(),
-                'agg_field': agg_field.strip(),
-                'group_by': group_by.strip(),
-                'table': table.strip()
-            }
-        
-        # Check for select type queries with possible subqueries
-        match_select = self.regex_select.match(query)
-        if match_select:
-            fields, conditions, tables, join_conditions = match_select.groups()
-            join_conditions_parsed = self.parse_join_conditions(join_conditions)
-            return {
-                'method': 'select',
-                'fields': [field.strip() for field in fields.split(',')],
-                'where': [condition.strip() for condition in conditions.split(',')],
-                'subq': {
-                    'type': 'join',
-                    'tables': [table.strip() for table in tables.split(',')],
-                    'on': join_conditions_parsed
-                }
-            }
-
-        # If no match is found, return an empty dictionary
-        return {}
-
-    def parse_join_conditions(self, join_conditions):
-        # Parse the join conditions
-        matches = self.regex_join.findall(join_conditions)
-        parsed_conditions = {}
-        for match in matches:
-            left, right = match
-            parsed_conditions[left.strip()] = right.strip()
-        return parsed_conditions
-
 
 class CommandInterface:
     @staticmethod
-    def start(db_name):
-        db = Database()
-        parser = QueryParser()
+    def start(db_mem):
+        db = Database(db_mem)
+        parser = get_parser()
         while True:
             command = input('qlfish > ').strip()
             if command.lower() == 'exit':
                 break
             else:
-                # Parsing the command
-                parsed_command = parser.parse(command)
-                if parsed_command:
-                    # If it's a query command
-                    if parsed_command['type'] in ['select', 'agg']:
-                        query_result = db.query(method=parsed_command['type'], **parsed_command)
-                        for result in query_result:
-                            print(result)
-                    else:
-                        print("Unsupported or invalid command.")
+                cruds = ['ingest', 'create table', 'insert into', 'update', 'delete from']
+                is_crud = any([command.startswith(crud) for crud in cruds])
+                if not is_crud:
+                    parsed = parser.parse(command)
+                    query_results = CommandInterface.generate_query(parsed, db)
+                    for result in query_results:
+                        print(f">> {result}")
                 else:
-                    # Handling other database operations
                     CommandInterface.handle_db_operations(command, db)
+
+    @staticmethod
+    def generate_query(parsed, db):
+        try:
+            if 'subq' in parsed:
+                subq = parsed['subq']
+                if type(subq) == str:
+                    parsed['tables'] = [subq]
+                else:
+                    parsed['subq'] = CommandInterface.generate_query(parsed['subq'], db)
+            return db.query(**parsed)
+        except:
+            return db.query(**parsed)
 
     @staticmethod
     def handle_db_operations(command, db):
         if command.startswith("create table"):
             _, _, table_name = command.split()
             print(db.create_table(table_name))
+        elif command.startswith("ingest"):
+            # "ingest [filename] into [table]"
+            _, filename, _, table_name = command.split()
+            print(db.ingest(filename, table_name))
         elif command.startswith("insert into"):
             # "insert into [table] [json_document]"
             _, _, table_name, json_document = command.split(maxsplit=3)
@@ -516,6 +487,5 @@ class CommandInterface:
         else:
             print("Command not recognized.")
 
-# if __name__ == '__main__':
-#     CommandInterface.start()
-# %%
+if __name__ == '__main__':
+    CommandInterface.start(2e5)

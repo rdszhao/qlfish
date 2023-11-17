@@ -1,0 +1,13 @@
+student_id,name,age,major,gpa
+1,"Alice",20,"Computer Science",3.8
+2,"Bob",22,"Computer Science",3.6
+3,"Charlie",21,"Computer Science",3.9
+4,"David",23,"Computer Science",3.7
+5,"Eve",20,"Data Science",3.9
+6,"Frank",22,"Data Science",3.6
+7,"Grace",21,"Data Science",3.8
+8,"Hank",23,"Data Science",3.7
+9,"Ivy",20,"Computer Engineering",3.6
+10,"Jack",22,"Computer Engineering",3.8
+11,"Kate",21,"Computer Engineering",3.7
+12,"Leo",23,"Computer Engineering",3.9

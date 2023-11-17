@@ -3,106 +3,100 @@ import os
 import re
 import sys
 import json
+import heapq
+import itertools
+import csv
 import argparse
-import numpy as np
 from collections import defaultdict
-# %%
+
 class Database:
-    def __init__(self, db_name:str)->None:
-        '''
-        initialize a database with a given name.
+    def __init__(self, core_lim=20000)->None:
+        self.tables = {}
+        self.core_lim = core_lim
+        self.chunk_size = 0
 
-        db_name (str): name of the database file.
+    def ingest(self, filename:str, table:str)->None:
+        self.tables[table] = filename
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            total_bytes, rows = 0, 0
+            for row in reader:
+                total_bytes += sys.getsizeof(row)
+                rows += 1
+            avg_bytes = total_bytes / rows
+            chunk_size = int(self.core_lim / avg_bytes)
+            if chunk_size > self.chunk_size:
+                self.chunk_size = chunk_size
+            print(self.chunk_size)
 
-        initializes an empty database if the file doesn't exist, otherwise loads existing data.
-        '''
-        self.db_name = db_name
-        self.data = {}
-        if os.path.exists(db_name):
-            with open(db_name, 'r') as f:
-                self.data = json.load(f)
+    def open_stream(self, table:str):
+        filename = self.tables[table]
+
+        def factory():
+            with open(filename, 'r') as file:
+                header_line = file.readline()
+                headers = header_line.strip().split(',')
+
+                while True:
+                    line = file.readline()
+                    if not line:
+                        break
+
+                    reader = csv.DictReader([line], fieldnames=headers, quoting=csv.QUOTE_NONNUMERIC)
+                    for item in reader:
+                        yield item
+        return factory
+
+    def create_table(self, table:str)->str:
+        if table not in self.tables:
+            filename = f"data/{table}.csv"
+            with open(filename, 'w') as file:
+                file.write('')
+            self.tables[table] = filename
+            return f"table {table} created"
         else:
-            with open(db_name, 'w') as f:
-                json.dump(self.data, f)
+            return f"table {table} already exists"
 
-    def save(self)->None:
-        '''
-        save the current database state to the file.
-        '''
-        with open(self.db_name, 'w') as f:
-            json.dump(self.data, f)
+    def insert(self, table:str, document:dict)->str:
+        if table not in self.tables:
+            return f"table {table} does not exist"
+        else:
+            filename = self.tables[table]
+            with open(filename, 'a') as file:
+                writer = csv.DictWriter(file, fieldnames=document.keys(), quoting=csv.QUOTE_NONNUMERIC)
+                writer.writerow(document)
+            return f"{document} inserted into {table}"
 
-    def create_collection(self, name:str)->str:
-        '''
-        create a new collection in the database.
+    def update(self, table:str, on, document:dict)->str:
+        if table not in self.tables:
+            return f"table {table} does not exist"
+        else:
+            filename = self.tables[table]
+            with open(filename, 'r') as file:
+                header_line = file.readline()
+                headers = header_line.strip().split(',')
+                reader = csv.DictReader(file, fieldnames=headers, quoting=csv.QUOTE_NONNUMERIC)
+                for doc in reader:
+                    if doc[on] == document[on]:
+                        for key, value in document.items():
+                            doc[key] = value
+                        break
+            return f"{document} updated in {table}"
 
-        name (str): the name of the collection to create.
-
-        returns:
-            str: A message indicating the success or failure of the operation.
-        '''
-        if name not in self.data:
-            self.data[name] = []
-            self.save()
-            return f"collection {name} created"
-        return f"collection {name} already exists"
-
-    def insert(self, collection_name:str, document:dict)->str:
-        '''
-        insert a document into a collection.
-
-        collection_name (str): the name of the collection to insert into.
-        document (dict): the document to insert.
-
-        returns:
-            str: a message indicating the success or failure of the operation.
-        '''
-        if collection_name not in self.data:
-            return f"collection {collection_name} does not exist."
-        self.data[collection_name].append(document)
-        self.save()
-        return f"document inserted into {collection_name}."
-
-    def update(self, collection_name:str, condition:callable, update_values:dict)->str:
-        '''
-        update documents in a collection based on a condition and update values.
-
-        collection_name (str): the name of the collection to update.
-        condition (callable): a function to filter documents for updating.
-        update_values (dict): a dictionary of field-value pairs to update.
-
-        returns:
-            str: a message indicating the number of documents updated.
-        '''
-        if collection_name not in self.data:
-            return f"collection {collection_name} does not exist."
-        updated_count = 0
-        for doc in self.data[collection_name]:
-            if condition(doc):
-                for key, value in update_values.items():
-                    doc[key] = value
-                updated_count += 1
-        self.save()
-        return f"{updated_count} document(s) updated."
-
-    def delete(self, collection_name:str, condition:callable)->str:
-        '''
-        delete documents in a collection based on a condition.
-
-        args:
-            collection_name (str): the name of the collection to delete from.
-            condition (callable): a function to filter documents for deletion.
-
-        returns:
-            str: a message indicating the number of documents deleted.
-        '''
-        if collection_name not in self.data:
-            return f"collection {collection_name} does not exist."
-        original_count = len(self.data[collection_name])
-        self.data[collection_name] = [doc for doc in self.data[collection_name] if not condition(doc)]
-        deleted_count = original_count - len(self.data[collection_name])
-        self.save()
-        return f"{deleted_count} document(s) deleted."
+    def delete(self, table:str, document:dict)->str:
+        if table not in self.tables:
+            return f"table {table} does not exist"
+        else:
+            filename = self.tables[table]
+            with open(filename, 'r') as file:
+                header_line = file.readline()
+                headers = header_line.strip().split(',')
+                reader = csv.DictReader(file, fieldnames=headers, quoting=csv.QUOTE_NONNUMERIC)
+                for doc in reader:
+                    if doc == document:
+                        break
+            return f"{document} deleted in {table}"
 
     def query(self, method:str, **kwargs:dict)->list:
             return Query(self, method, **kwargs).run()
@@ -111,109 +105,283 @@ class Query:
     def __init__(self, db:Database, method:str, **kwargs:dict)->None:
         self.kwargs = kwargs
         self.method = method
-
-        if 'subq' in self.kwargs:
-            self.data = self.kwargs['subq']
-        else:
-            self.data = db.data
+        self.db = db
 
     def run(self)->list:
-        if self.method == 'select':
-            table = self.kwargs.get('table')
-            fields = self.kwargs['fields']
-            where = self.kwargs.get('where')
-            return self.select(table, fields, where)
+        where = self.kwargs.get('where')
+        subq = self.kwargs.get('subq')
+        tables = self.kwargs.get('tables')
 
+        if subq:
+            if callable(subq) and self.method != 'group_by':
+                self.data = subq()
+            else:
+                self.data = self.kwargs['subq']
         elif self.method == 'join':
-            tables = self.kwargs['tables']
-            on = self.kwargs['on']
-            where = self.kwargs.get('where')
-            return self.join(tables, on, where)
+            self.data = {table: self.db.open_stream(table) for table in tables}
+        elif self.method != 'group_by':
+            self.data = {table: self.db.open_stream(table)() for table in tables}
+        try:
 
-        elif self.method == 'agg':
-            agg_func = self.kwargs['agg_func']
-            agg_field = self.kwargs['agg_field']
-            table = self.kwargs.get('table')
-            where = self.kwargs.get('where')
-            return self.agg(agg_func, agg_field, table, where)
+            if self.method == 'select':
+                fields = self.kwargs['fields']
+                sorting = self.kwargs.get('sorting')
+                return self.select(tables, fields, where, sorting)
 
-        elif self.method == 'group_by':
-            table = self.kwargs.get('table')
-            group_by = self.kwargs['group_by']
-            where = self.kwargs.get('where')
-            return self.group_by(table, group_by, where)
+            elif self.method == 'join':
+                on = self.kwargs['on']
+                return self.join(tables, on)
 
-    def select(self, table:str, fields:list, where:list=None)->list:
-            data = self.data[table] if table else self.data
+            elif self.method == 'agg':
+                agg_func = self.kwargs['agg_func']
+                agg_field = self.kwargs['agg_field']
+                sorting = self.kwargs.get('sorting')
+                return self.agg(agg_func, agg_field, tables, where, sorting)
+
+            elif self.method == 'group_by':
+                group_by = self.kwargs['group_by']
+                if 'subq' not in self.kwargs:
+                    self.data = {table: self.db.tables[table] for table in self.kwargs['tables']}
+                return self.group_by(tables, group_by, where)
+
+        except KeyError as e:
+            raise ValueError(f"{self.method} missing required argument: {e}")
+
+    def select(self, table:list, fields:list, where:list, sorting:str)->list:
+            data = self.data[table[0]] if table else self.data
+
             if where:
-                data = self.where(data, where)
-            return [{field: doc[field] for field in fields} for doc in data]
+                data = self.where(data, where)()
 
-    def join(self, tables:list, on:dict, where:list=None)->list:
-        join_data = {table: self.data[table] for table in tables}
-        base_table = list(on.keys())[0].split('.')[0]
-        join_result = [{f"{base_table}.{key}": value for key, value in doc.items()} for doc in join_data[base_table]]
-        for join_condition, join_field in on.items():
-            table1, field1 = join_condition.split('.')
-            table2, field2 = join_field.split('.')
-            new_join_result = []
-            index = defaultdict(list)
-            for doc in join_data[table2]:
-                index_key = f"{table2}.{field2}"
-                index_value = {f"{table2}.{key}": value for key, value in doc.items()}
-                index[doc[field2]].append(index_value)
-            for doc in join_result:
-                matching_docs = index.get(doc[f"{table1}.{field1}"], [])
-                for match in matching_docs:
-                    combined_doc = {**doc, **match}
-                    new_join_result.append(combined_doc)
-            join_result = new_join_result
-        if where:
-            join_result = self.where(join_result, where)
-        # remove the prefix from field names ("students." from "students.student_id")
-        for doc in join_result:
-            for key in list(doc.keys()):
-                doc[key.split('.')[1]] = doc.pop(key)
-        return join_result
+            if '*' in fields:
+                output = (doc for doc in data)
+            else:
+                output = ({field: doc[field] for field in fields} for doc in data)
 
-    def agg(self, agg_func:str, agg_field:str, table:str=None, where:list=None)->list:
-        data = self.data
-        if table:
-            data = data[table]
-        if where:
-            data = self.where(data, where)
+            if sorting:
+                sort_dict = {'field': fields[-1], 'order': sorting}
+                return self.sort_large_data(output, sort_dict)
+            else:
+                return list(output)
 
-        funcs = {
-            'avg': np.mean, 'sum': np.sum, 'count': 
-            len, 'min': np.min, 'max': np.max
-        }
-        afunc = funcs.get(agg_func)
+    def sort_large_data(self, data_gen, sorting):
+        chunk_size = self.db.chunk_size
+        temp_files = []
 
-        if not afunc:
-            raise ValueError(f"unsupported aggregate function: {agg_func}")
-        elif type(data) is not defaultdict:
-            values = [doc[agg_field] for doc in data]
-            return afunc(values) if values else None
-        else:
-            outputs = {key: afunc([v[agg_field] for v in val]) for key, val in data.items()}
-            return outputs
+        while True:
+            chunk = list(itertools.islice(data_gen, chunk_size))
+            if not chunk:
+                break
 
-    def group_by(self, table:str, group_by:str, where:list=None)->list:
+            chunk.sort(key=lambda x: x[sorting['field']], reverse=(sorting['order'] != 'asc'))
+            temp_file_path = f'temp_{len(temp_files)}.csv'
+            with open(temp_file_path, 'w') as f:
+                for line in chunk:
+                    f.write(str(line) + '\n')
+            temp_files.append(temp_file_path)
+
+        # Merge sorted files and clean up
+        sorted_data = self.merge_sorted_files(temp_files)
+        for temp_file in temp_files:
+            os.remove(temp_file)
+        return sorted_data
+
+    def merge_sorted_files(self, sorted_files):
+        sorted_data = []
+
+        with open(sorted_files[0], 'r') as merged:
+            for line in merged:
+                sorted_data.append(eval(line.strip()))
+
+        return sorted_data
+
+    def join(self, tables, on):
+        def factory():
+            join_data = {table: self.data[table]() for table in tables}
+            join_conditions = list(on.items())
+
+            def join_two_tables_factory(table1, field1, table2, field2):
+                def inner():
+                    index = defaultdict(list)
+                    for doc in table2:
+                        index_key = f"{field2}"
+                        index_value = {key: value for key, value in doc.items()}
+                        index[doc[field2]].append(index_value)
+
+                    for doc in table1:
+                        matching_docs = index.get(doc[field1], [])
+                        for match in matching_docs:
+                            combined_doc = {**doc, **match}
+                            yield combined_doc
+
+                return inner
+
+            base_table_key, join_field = join_conditions[0]
+            base_table, base_field = base_table_key.split('.')
+            join_table, join_table_field = join_field.split('.')
+            join_result = join_two_tables_factory(join_data[base_table], base_field, join_data[join_table], join_table_field)()
+
+            for join_condition, join_field in join_conditions[1:]:
+                base_table, base_field = join_condition.split('.')
+                join_table, join_table_field = join_field.split('.')
+                join_result = join_two_tables_factory(join_result, base_field, join_data[join_table], join_table_field)()
+
+            return join_result
+
+        return factory
+
+    def _stream_agg(self, chunked_data, agg_func):
+        total, count, min_val, max_val = 0, 0, float('inf'), float('-inf')
+        for value in chunked_data:
+            if agg_func in ['avg', 'sum']:
+                total += value
+            if agg_func in ['avg', 'count']:
+                count += 1
+            if agg_func in ['min', 'max']:
+                min_val = min(min_val, value)
+                max_val = max(max_val, value)
+
+        if agg_func == 'avg':
+            return total / count if count else 0
+        elif agg_func == 'sum':
+            return total
+        elif agg_func == 'count':
+            return count
+        elif agg_func == 'min':
+            return min_val if count else None
+        elif agg_func == 'max':
+            return max_val if count else None
+
+
+    def agg(self, agg_func:str, agg_field:str, table:str, where, sorting):
+        chunk_size = self.db.chunk_size
         data = self.data[table] if table else self.data
+
+        if where:
+            data = self.where(data, where)()
+
+        if type(data) == dict:
+            result_dict = {}
+            for key, datagen in data.items():
+                intermediate_results = []
+                while True:
+                    chunk = list(itertools.islice(datagen, chunk_size))
+                    if not chunk:
+                        break
+
+                    values = (doc[agg_field] for doc in chunk)
+                    agg_result = self._stream_agg(values, agg_func)
+                    intermediate_results.append(agg_result)
+                results = self.combine_agg_results(intermediate_results, agg_func)
+                result_dict[key] = results
+
+            final_output = result_dict
+
+        else:
+            intermediate_results = []
+            while True:
+                chunk = list(itertools.islice(data, chunk_size))
+                if not chunk:
+                    break
+
+                values = (doc[agg_field] for doc in chunk)
+                agg_result = self._stream_agg(values, agg_func)
+                intermediate_results.append(agg_result)
+
+            final_output = self.combine_agg_results(intermediate_results, agg_func)
+
+        if sorting:
+            final_output = sorted(final_output.items(), key=lambda x: x[1], reverse=(sorting == 'desc'))
+
+        return final_output
+        
+
+    def combine_agg_results(self, intermediate_results, agg_func):
+        if agg_func == 'avg':
+            total_sum = sum(intermediate_results)
+            total_count = len(intermediate_results)
+            return total_sum / total_count if total_count else 0
+        elif agg_func == 'sum':
+            return sum(intermediate_results)
+        elif agg_func == 'count':
+            return sum(intermediate_results)
+        elif agg_func == 'min':
+            return min(intermediate_results, default=None)
+        elif agg_func == 'max':
+            return max(intermediate_results, default=None)
+
+
+    def open_csv(self, filename:str):
+        with open(filename, 'r') as file:
+            header_line = file.readline()
+            headers = header_line.strip().split(',')
+
+            while True:
+                pos = file.tell()
+                line = file.readline()
+                if not line:
+                    break
+
+                reader = csv.DictReader([line], fieldnames=headers, quoting=csv.QUOTE_NONNUMERIC)
+                for item in reader:
+                    yield item, pos
+
+    def make_index(self, stream, group_by_field):
+        index = defaultdict(list)
+        for item, pos in stream:
+            index[item[group_by_field]].append(pos)
+        return index
+
+    def stream_from_indices(self, filename, indices):
+        with open(filename, 'r') as file:
+            header_line = file.readline()
+            headers = header_line.strip().split(',')
+            for pos in indices:
+                file.seek(pos)
+                line = file.readline()
+                reader = csv.DictReader([line], fieldnames=headers, quoting=csv.QUOTE_NONNUMERIC)
+                for item in reader:
+                    yield item					
+
+    def index_from_join(self, join_factory, group_by):
+        index = defaultdict(list)
+        join_gen = join_factory()
+        for i, doc in enumerate(join_gen):
+            index[doc[group_by]].append(i)
+        return index
+
+    def stream_from_join(self, join_factory, indices):
+        join_gen = join_factory()
+        for i, doc in enumerate(join_gen):
+            if i in indices:
+                yield doc
+
+    def group_by(self, table:str, group_by:str, where:list)->list:
+        if table:
+            filename = self.data[table[0]]
+            data = self.open_csv(filename)
+        else:
+            data = self.data
+
         if where:
             data = self.where(data, where)
-        grouped_data = defaultdict(list)
-        for doc in data:
-            key = doc[group_by]
-            grouped_data[key].append(doc)
-        return grouped_data
+
+        # not from subq
+        if table:
+            indices = self.make_index(data, group_by)
+            grouped = {i: self.stream_from_indices(filename, indices[i]) for i in indices}
+        else:
+            indices = self.index_from_join(data, group_by)
+            grouped = {i: self.stream_from_join(data, indices[i]) for i in indices}
+
+        return grouped
 
     def where(self, data:list, conditions:list):
-        filtered_data = []
-        for doc in data:
-            if self._evaluate_conditions(doc, conditions):
-                filtered_data.append(doc)
-        return filtered_data
+        def factory():
+            for doc in data:
+                if self._evaluate_conditions(doc, conditions):
+                    yield doc
+        return factory
 
     def _evaluate_conditions(self, doc, conditions):
         operators = {
@@ -252,133 +420,102 @@ class Query:
         
         return field, op, value
 
+class QueryParser:
+    def __init__(self):
+        # Regular expressions to match different parts of the query
+        self.regex_select = re.compile(r'select (.+) where (.+) from join (.+) on (.+)')
+        self.regex_agg = re.compile(r'find (.+)\((.+)\) by (.+) from (.+)')
+        self.regex_join = re.compile(r'(\w+\.\w+): (\w+\.\w+)')
 
-# class CommandInterface:
-#     @staticmethod
-#     def start(db_name):
-#         '''
-#         Start the command-line interface for interacting with the database.
+    def parse(self, query):
+        # Check for aggregation type queries
+        match_agg = self.regex_agg.match(query)
+        if match_agg:
+            agg_func, agg_field, group_by, table = match_agg.groups()
+            return {
+                'method': 'agg',
+                'agg_func': agg_func.strip(),
+                'agg_field': agg_field.strip(),
+                'group_by': group_by.strip(),
+                'table': table.strip()
+            }
+        
+        # Check for select type queries with possible subqueries
+        match_select = self.regex_select.match(query)
+        if match_select:
+            fields, conditions, tables, join_conditions = match_select.groups()
+            join_conditions_parsed = self.parse_join_conditions(join_conditions)
+            return {
+                'method': 'select',
+                'fields': [field.strip() for field in fields.split(',')],
+                'where': [condition.strip() for condition in conditions.split(',')],
+                'subq': {
+                    'type': 'join',
+                    'tables': [table.strip() for table in tables.split(',')],
+                    'on': join_conditions_parsed
+                }
+            }
 
-#         Args:
-#             db_name (str): The name of the database file.
-#         '''
-#         db = Database(db_name)
-#         while True:
-#             command = input('qlfish > ').strip()
-#             if command.lower() == 'exit':
-#                 break
-#             else:
-#                 tokens = command.split()
-#                 action = tokens[0].lower()
+        # If no match is found, return an empty dictionary
+        return {}
 
-#                 if action == 'create':
-#                     _, _, collection_name = tokens
-#                     print(db.create_collection(collection_name))
-#                 elif action == 'insert':
-#                     _, _, collection_name, values = tokens
-#                     document = json.loads(values)
-#                     print(db.insert(collection_name, document))
-#                 elif action == 'find':
-#                     _, fields, from_clause, *rest = tokens[1:]
-#                     fields = fields.split(',')
-#                     collection_name = from_clause
+    def parse_join_conditions(self, join_conditions):
+        # Parse the join conditions
+        matches = self.regex_join.findall(join_conditions)
+        parsed_conditions = {}
+        for match in matches:
+            left, right = match
+            parsed_conditions[left.strip()] = right.strip()
+        return parsed_conditions
 
-#                     condition = None
-#                     join = None
-#                     sort_by = None
-#                     group_by = None
-#                     aggregate = None
 
-#                     i = 0
-#                     while i < len(rest):
-#                         token = rest[i]
-#                         if token == 'where':
-#                             i += 1
-#                             condition_str = rest[i:]
-#                             condition = QueryParser.parse_condition(' '.join(condition_str))
-#                             i += len(condition_str)
-#                         elif token == 'join':
-#                             join = (rest[i+1], rest[i+3])  # JOIN collection_name ON field
-#                             i += 4
-#                         elif token == 'order':
-#                             sort_by = (rest[i+3], rest[i+4])  # ORDER BY field ASC/DESC
-#                             i += 5
-#                         elif token == 'group':
-#                             group_by = rest[i+3]  # GROUP BY field
-#                             aggregate = (rest[i+5], rest[i+6])  # AGGREGATE field FUNCTION
-#                             i += 7
-#                         else:
-#                             i += 1
+class CommandInterface:
+    @staticmethod
+    def start(db_name):
+        db = Database()
+        parser = QueryParser()
+        while True:
+            command = input('qlfish > ').strip()
+            if command.lower() == 'exit':
+                break
+            else:
+                # Parsing the command
+                parsed_command = parser.parse(command)
+                if parsed_command:
+                    # If it's a query command
+                    if parsed_command['type'] in ['select', 'agg']:
+                        query_result = db.query(method=parsed_command['type'], **parsed_command)
+                        for result in query_result:
+                            print(result)
+                    else:
+                        print("Unsupported or invalid command.")
+                else:
+                    # Handling other database operations
+                    CommandInterface.handle_db_operations(command, db)
 
-#                     results = db.find(
-#                         collection_name,
-#                         condition=condition,
-#                         fields=fields,
-#                         sort_by=sort_by,
-#                         join=join,
-#                         group_by=group_by,
-#                         aggregate=aggregate
-#                     )
-#                     for res in results:
-#                         print(res)
+    @staticmethod
+    def handle_db_operations(command, db):
+        if command.startswith("create table"):
+            _, _, table_name = command.split()
+            print(db.create_table(table_name))
+        elif command.startswith("insert into"):
+            # "insert into [table] [json_document]"
+            _, _, table_name, json_document = command.split(maxsplit=3)
+            document = json.loads(json_document)
+            print(db.insert(table_name, document))
+        elif command.startswith("update"):
+            # "update [table] on [key] [json_document]"
+            _, table_name, _, key, json_document = command.split(maxsplit=4)
+            document = json.loads(json_document)
+            print(db.update(table_name, key, document))
+        elif command.startswith("delete from"):
+            # "delete from [table] [json_document]"
+            _, _, table_name, json_document = command.split(maxsplit=3)
+            document = json.loads(json_document)
+            print(db.delete(table_name, document))
+        else:
+            print("Command not recognized.")
 
-#                 elif action == 'delete':
-#                     _, _, collection_name, condition = tokens
-#                     condition = eval(condition)
-#                     print(db.delete(collection_name, condition))
-
-#                 elif action == 'update':
-#                     _, _, collection_name, set_clause, where_clause = tokens
-#                     set_values = json.loads(set_clause)
-#                     condition = eval(where_clause)
-#                     print(db.update(collection_name, condition, set_values))
-
-#                 else:
-#                     print('Command not recognized.')
+# if __name__ == '__main__':
+#     CommandInterface.start()
 # %%
-db = Database('testdata.json')
-# %% platonic queries
-'select major, avg(gpa) from students by major'
-
-subq = db.query(method='group_by', table='students', group_by='major')
-q = db.query(method='agg', agg_func='avg', agg_field='gpa',subq=subq)
-
-db.query(
-    'agg',
-    agg_func='avg',
-    agg_field='gpa',
-    subq=db.query(
-        'group_by',
-        table='students',
-        group_by='major'
-    )
-)
-# %%
-'''
-select course_name 
-from join students, enrollments, courses 
-on students.student_id -> enrollments.student_id, enrollments.course_id -> courses.course_id 
-where students.name == Alice
-'''
-
-subq = db.query(method='join', tables=['students', 'courses', 'enrollments'], on={'students.student_id': 'enrollments.student_id', 'enrollments.course_id': 'courses.course_id'}, where=['students.name == Alice'])
-q = db.query('select', fields=['course_name'], subq=subq)
-
-db.query(
-    'select',
-    fields=['course_name'],
-    subq=db.query(
-        method='join',
-        tables=['students',
-                'courses',
-                'enrollments'
-            ],
-        on={
-            'students.student_id':
-            'enrollments.student_id',
-            'enrollments.course_id':
-            'courses.course_id'
-        },
-        where=['students.name == "Alice"']
-    )
-)

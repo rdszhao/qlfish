@@ -135,43 +135,10 @@ def p_optional_sorting(p):
     else:
         p[0] = None
 
-# def p_optional_sorting(p):
-#     '''optional_sorting : LBRACKET sort_spec RBRACKET
-#                         | '''
-#     if len(p) == 4:
-#         p[0] = p[2]
-#     else:
-#         p[0] = None
-
 def p_sort_order(p):
     '''sort_order : ASC
                   | DESC'''
     p[0] = p[1].lower()
-
-# def p_sort_order(p):
-#     '''sort_order : IDENTIFIER ASC
-#                   | IDENTIFIER DESC
-#                   | ASC
-#                   | DESC'''
-#     if len(p) == 3:
-#         p[0] = {'field': p[1], 'order': p[2].lower()}
-#     elif len(p) == 2:
-#         p[0] = {'order': p[1].lower()}
-
-# def p_sort_spec(p):
-#     '''sort_spec : sort_order IDENTIFIER
-#                  | IDENTIFIER sort_order
-#                  | IDENTIFIER
-#                  | sort_order'''
-#     if len(p) == 2:
-#         if p[1] in ['asc', 'desc']:
-#             p[0] = {'field': None, 'order': p[1].lower()}
-#         else:
-#             p[0] = {'field': p[1], 'order': None}
-#     elif len(p) == 3:
-#         p[0] = {'field': p[2], 'order': p[1].lower()}
-#     else:
-#         p[0] = {'field': None, 'order': None}
 
 def p_conditions(p):
     '''conditions : condition
@@ -216,15 +183,3 @@ parser = yacc.yacc()
 
 def get_parser():
     return parser
-
-test_queries = [
-	'find avg(gpa) by major from students',
-	'select course_name where students.name == "Sean Collins" from join students, enrollments, courses on students.student_id: enrollments.student_id, enrollments.course_id: courses.course_id',
-	'find count(student_id) by course_id from enrollments',
-	'find avg(gpa) by course_name from join students, enrollments, courses on students.student_id: enrollments.student_id, enrollments.course_id: courses.course_id',
-	'select course_name [desc] where instructor == "Prof. Smith" from courses',
-	'select name where major == "Data Science", course_name == "Data Structures" from join students, courses, enrollments on students.student_id: enrollments.student_id, enrollments.course_id: courses.course_id'
-]
-
-qstring = 'select *, course_name [asc] where students.major == "Computer Engineering" from join students, enrollments, courses on students.student_id: enrollments.student_id, enrollments.course_id: courses.course_id '
-parser.parse(qstring)

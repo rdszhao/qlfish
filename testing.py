@@ -83,7 +83,6 @@ db.query(
 	)
 )
 # %%
-select course_name [asc], semester where students.major == "Computer Engineering" from join students, enrollments, courses on students.student_id: enrollments.student_id, enrollments.course_id: courses.course_id 
 '''
 select course_name [asc], semester where students.major == "Computer Engineering"
 from join students, enrollments, courses 

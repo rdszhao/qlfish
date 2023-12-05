@@ -2,17 +2,17 @@
 import os
 import re
 import sys
-import json
-import heapq
-import itertools
 import csv
+import json
 import argparse
+import itertools
+import numpy as np
 from collections import defaultdict
 
 from parserfile import get_parser
 
 class Database:
-    def __init__(self, core_lim=20000)->None:
+    def __init__(self, core_lim)->None:
         self.tables = {}
         self.core_lim = core_lim
         self.chunk_size = 0
@@ -79,30 +79,52 @@ class Database:
             return f"table {table} does not exist"
         else:
             filename = self.tables[table]
-            with open(filename, 'r') as file:
-                header_line = file.readline()
-                headers = header_line.strip().split(',')
-                reader = csv.DictReader(file, fieldnames=headers, quoting=csv.QUOTE_NONNUMERIC)
-                for doc in reader:
-                    if doc[on] == document[on]:
+            temp_filename = filename + '.tmp'
+            updated = False
+
+            with open(filename, 'r') as file, open(temp_filename, 'w', newline='') as temp_file:
+                reader = csv.DictReader(file)
+                writer = csv.DictWriter(temp_file, fieldnames=reader.fieldnames, quoting=csv.QUOTE_NONNUMERIC)
+                writer.writeheader()
+
+                for row in reader:
+                    if row[on] == str(document[on]):
                         for key, value in document.items():
-                            doc[key] = value
-                        break
-            return f"{document} updated in {table}"
+                            row[key] = value
+                        updated = True
+                    writer.writerow(row)
+            if updated:
+                os.replace(temp_filename, filename)
+                return f"{document} updated in '{table}'"
+            else:
+                os.remove(temp_filename)
+                return f"no matching record found in '{table}'"
 
     def delete(self, table:str, document:dict)->str:
         if table not in self.tables:
             return f"table {table} does not exist"
         else:
             filename = self.tables[table]
-            with open(filename, 'r') as file:
-                header_line = file.readline()
-                headers = header_line.strip().split(',')
-                reader = csv.DictReader(file, fieldnames=headers, quoting=csv.QUOTE_NONNUMERIC)
-                for doc in reader:
-                    if doc == document:
-                        break
-            return f"{document} deleted in {table}"
+            temp_filename = filename + '.tmp'
+            deleted = False
+
+            with open(filename, 'r') as file, open(temp_filename, 'w', newline='') as temp_file:
+                reader = csv.DictReader(file)
+                writer = csv.DictWriter(temp_file, fieldnames=reader.fieldnames, quoting=csv.QUOTE_NONNUMERIC)
+                writer.writeheader()
+
+                for row in reader:
+                    if not all(row[key] == str(document[key]) for key in document):
+                        writer.writerow(row)
+                    else:
+                        deleted = True
+
+            if deleted:
+                os.replace(temp_filename, filename)
+                return f"{document} deleted from '{table}'"
+            else:
+                os.remove(temp_filename)
+                return f"no matching record found in '{table}'"
 
     def query(self, method:str, **kwargs:dict)->list:
             return Query(self, method, **kwargs).run()
@@ -139,8 +161,8 @@ class Query:
                 return self.join(tables, on)
 
             elif self.method == 'agg':
-                agg_func = self.kwargs['agg_func']
-                agg_field = self.kwargs['agg_field']
+                agg_func = self.kwargs['agg_func']['function']
+                agg_field = self.kwargs['agg_func']['field']
                 sorting = self.kwargs.get('sorting')
                 return self.agg(agg_func, agg_field, tables, where, sorting)
 
@@ -186,7 +208,7 @@ class Query:
                     f.write(str(line) + '\n')
             temp_files.append(temp_file_path)
 
-        # Merge sorted files and clean up
+        # merge sorted files and clean up
         sorted_data = self.merge_sorted_files(temp_files)
         for temp_file in temp_files:
             os.remove(temp_file)
@@ -263,6 +285,14 @@ class Query:
         chunk_size = self.db.chunk_size
         data = self.data[table] if table else self.data
 
+        funcs = {
+            'avg': np.mean,
+            'sum': np.sum,
+            'count': len,
+            'min': np.max,
+            'max': np.max
+        }
+
         if where:
             data = self.where(data, where)()
 
@@ -275,8 +305,9 @@ class Query:
                     if not chunk:
                         break
 
-                    values = (doc[agg_field] for doc in chunk)
-                    agg_result = self._stream_agg(values, agg_func)
+                    values = [doc[agg_field] for doc in chunk]
+                    # agg_result = self._stream_agg(values, agg_func)
+                    agg_result = funcs[agg_func](values)
                     intermediate_results.append(agg_result)
                 results = self.combine_agg_results(intermediate_results, agg_func)
                 result_dict[key] = results
@@ -429,7 +460,7 @@ class Query:
 
 class CommandInterface:
     @staticmethod
-    def start(db_mem):
+    def start(db_mem=2e5):
         db = Database(db_mem)
         parser = get_parser()
         while True:
@@ -454,6 +485,7 @@ class CommandInterface:
                 subq = parsed['subq']
                 if type(subq) == str:
                     parsed['tables'] = [subq]
+                    del parsed['subq']
                 else:
                     parsed['subq'] = CommandInterface.generate_query(parsed['subq'], db)
             return db.query(**parsed)
@@ -462,30 +494,46 @@ class CommandInterface:
 
     @staticmethod
     def handle_db_operations(command, db):
-        if command.startswith("create table"):
+        if command.startswith('create table'):
             _, _, table_name = command.split()
             print(db.create_table(table_name))
-        elif command.startswith("ingest"):
-            # "ingest [filename] into [table]"
+        elif command.startswith('ingest'):
+            # 'ingest [filename] into [table]'
             _, filename, _, table_name = command.split()
             print(db.ingest(filename, table_name))
-        elif command.startswith("insert into"):
-            # "insert into [table] [json_document]"
+        elif command.startswith('insert into'):
+            # 'insert into [table] [json_document]'
             _, _, table_name, json_document = command.split(maxsplit=3)
-            document = json.loads(json_document)
-            print(db.insert(table_name, document))
-        elif command.startswith("update"):
-            # "update [table] on [key] [json_document]"
+            try:
+                document = json.loads(json_document)
+            except json.decoder.JSONDecodeError:
+                print('invalid json')
+            else:
+                print(db.insert(table_name, document))
+        elif command.startswith('update'):
+            # 'update [table] on [key] [json_document]'
             _, table_name, _, key, json_document = command.split(maxsplit=4)
-            document = json.loads(json_document)
-            print(db.update(table_name, key, document))
+            try:
+                document = json.loads(json_document)
+            except json.decoder.JSONDecodeError:
+                print('invalid json')
+            else:
+                print(db.update(table_name, key, document))
         elif command.startswith("delete from"):
-            # "delete from [table] [json_document]"
+            # 'delete from [table] [json_document]'
             _, _, table_name, json_document = command.split(maxsplit=3)
-            document = json.loads(json_document)
-            print(db.delete(table_name, document))
+            try:
+                document = json.loads(json_document)
+            except json.decoder.JSONDecodeError:
+                print('invalid json')
+            else:
+                print(db.delete(table_name, document))
         else:
-            print("Command not recognized.")
+            print('command not recognized')
+
 
 if __name__ == '__main__':
-    CommandInterface.start(2e5)
+    args = argparse.ArgumentParser()
+    args.add_argument('--db_mem', type=int, default=2e5)
+    db_mem = args.parse_args().db_mem
+    CommandInterface.start(db_mem)

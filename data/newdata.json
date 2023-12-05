@@ -1,0 +1,10 @@
+[
+	// inserts
+	{"student_id": 45006, "student_name": "James Wu", "age": 20, "major": "Data Science", "gpa": 3.86},
+	{"student_id": 45007, "student_name": "Daniel Lee", "age": 22, "major": "Computer Engineering", "gpa": 3.48},
+	{"course_id": "DSCI551", "course_name": "Database Systems", "instructor": "Wensheng Wu"},
+	{"enrollment_id": 160002, "student_id": 45006, "course_id": "DSCI551", "semester": "Spring 2024"},
+	{"enrollment_id": 160003, "student_id": 45007, "course_id": "DSCI551", "semester": "Spring 2024"}
+	// updates
+	{"student_id": 45006, "student_name": "James Woo", "age": 20, "major": "Data Science", "gpa": 3.86},
+]

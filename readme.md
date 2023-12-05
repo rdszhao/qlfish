@@ -1,5 +1,3 @@
-DSCI 551: final project
-
 ![Image Description](211.png)
 
 # qlfish: database query system
